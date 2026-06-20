@@ -72,19 +72,20 @@ def build_label_dataframe(train_csv, train_images_dir):
 
     # For each image keep only the class with the most pixels
     dominant = (
-        df.sort_values("pixel_count", ascending=False)
-          .drop_duplicates(subset="ImageId")
-          [["ImageId", "ClassId"]]
-          .rename(columns={"ImageId": "image_id", "ClassId": "label"})
+        df.sort_values("pixel_count", ascending=False)  # biggest defect first
+          .drop_duplicates(subset="ImageId")             # first row per image = dominant defect
+          [["ImageId", "ClassId"]]                       # drop pixel_count and EncodedPixels
+          .rename(columns={"ImageId": "image_id", "ClassId": "label"})  # match our column names
     )
 
     # All images on disk (includes images not in CSV = no defect)
     all_files = sorted(f for f in os.listdir(train_images_dir) if f.endswith(".jpg"))
-    all_df = pd.DataFrame({"image_id": all_files})
+    all_df = pd.DataFrame({"image_id": all_files})  # one row per image file
 
-    # Merge — images not in dominant get label = 0 (no defect)
+    # Left merge: every image stays, matched images get their defect label
+    # images with no match in dominant (not in CSV) get NaN → filled with 0 (No Defect)
     label_df = all_df.merge(dominant, on="image_id", how="left")
-    label_df["label"] = label_df["label"].fillna(0).astype(int)
+    label_df["label"] = label_df["label"].fillna(0).astype(int)  # NaN → 0
 
     return label_df
 
@@ -114,9 +115,13 @@ class SteelDataset(Dataset):
 
 def make_splits(label_df, seed):
     """Split label_df into train / val / test (70 / 15 / 15)."""
+    # stratify ensures each split has the same class ratio as the full dataset
+    # train_test_split only splits into two parts, so we do it twice:
+    # step 1: 70% train, 30% temp
     train_df, temp_df = train_test_split(
         label_df, test_size=0.30, random_state=seed, stratify=label_df["label"]
     )
+    # step 2: temp split 50/50 → 15% val, 15% test
     val_df, test_df = train_test_split(
         temp_df, test_size=0.50, random_state=seed, stratify=temp_df["label"]
     )

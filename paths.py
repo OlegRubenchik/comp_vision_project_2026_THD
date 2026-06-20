@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # ── CONFIG ──────────────────────────────────────────────────────────────────
-ROOT_DIR     = Path(r"C:\projects\comp_vision_project_2026_THD")
+ROOT_DIR     = Path(__file__).parent
 DATA_DIR     = ROOT_DIR / "data"
 TRAIN_CSV    = DATA_DIR / "train.csv"
 TRAIN_IMAGES = DATA_DIR / "train_images"

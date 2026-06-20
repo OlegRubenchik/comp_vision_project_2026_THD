@@ -62,8 +62,6 @@ random.seed(SEED)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. DEVICE
-# Lecture reference: "Efficient training — Use thousands of cores on a GPU"
-#                   (Slides-3, p.210)
 # ─────────────────────────────────────────────────────────────────────────────
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
@@ -87,12 +85,13 @@ label_df = build_label_dataframe(TRAIN_CSV, TRAIN_IMAGES)
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. DATASET PREPARATION
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n── Dataset Preparation ──")
-print(f"Label distribution:\n{label_df['label'].value_counts().sort_index()}")
 
+# Split dataset into train/val/test (80/10/10) with stratification to maintain class distribution.
 train_df, val_df, test_df = make_splits(label_df, SEED)
+
 print(f"\nTrain: {len(train_df)} | Val: {len(val_df)} | Test: {len(test_df)}")
 
+# Create PyTorch Datasets and DataLoaders for each split. DataLoaders handle batching and shuffling.
 train_dataset, val_dataset, test_dataset, \
 train_loader, val_loader, test_loader = make_dataloaders(
     train_df, val_df, test_df, TRAIN_IMAGES, BATCH_SIZE, NUM_WORKERS
@@ -102,7 +101,6 @@ print(f"Batches — Train: {len(train_loader)} | Val: {len(val_loader)} | Test: 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. MODEL — Transfer Learning with EfficientNet-B0
-# Lecture reference: "Selected architectures" (Slides-3, p.217)
 #   Pre-trained on 1.2M ImageNet images. We replace only the final layer
 #   to output 5 scores instead of 1000 (fine-tuning).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,7 +113,10 @@ model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
 in_features = model.classifier[1].in_features
 model.classifier[1] = nn.Linear(in_features, NUM_CLASSES)
 
+# Move model weights to GPU before counting parameters (for accurate memory usage) 
+# So training runs on GPU
 model = model.to(DEVICE)
+
 
 total_params     = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -127,6 +128,7 @@ print(f"Trainable params: {trainable_params:,}")
 # Adam: adjusts weights after each batch to reduce loss
 # CosineAnnealingLR: gradually reduces learning rate for smoother convergence
 
+# Calculate class weights based on training set distribution
 counts = label_df["label"].value_counts().sort_index()
 class_weights = torch.tensor(
     [len(label_df) / (NUM_CLASSES * counts.get(c, 1)) for c in range(NUM_CLASSES)],
@@ -134,8 +136,8 @@ class_weights = torch.tensor(
 ).to(DEVICE)
 print(f"\nClass weights: {class_weights.cpu().numpy().round(3)}")
 
-criterion = nn.CrossEntropyLoss(weight=class_weights)
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+criterion = nn.CrossEntropyLoss(weight=class_weights) # Apply wights to loss function
+optimizer = torch.optim.Adam(model.parameters(), lr=LR) 
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
 
