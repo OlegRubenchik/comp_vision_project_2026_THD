@@ -35,20 +35,23 @@ All weights are fine-tuned on the steel dataset.
 ├── paths.py          # File paths and class names — edit this if you move the data
 ├── dataset.py        # Label assignment, train/val/test splits, DataLoaders
 ├── plots.py          # All matplotlib visualisation functions
-├── train.py              # Training pipeline — run this to train the model
-├── demo.py               # Live inference on a random test image
-├── eda.py                # Exploratory data analysis (optional, for research only)
-├── check_dups.py         # Perceptual hash check for train/test leakage (optional)
-├── pipeline_diagram.py   # Generates the ML pipeline overview diagram
+├── train.py          # Training pipeline — run this to train the model
+├── demo.py           # Live inference on a random test image
+├── eda.py            # Exploratory data analysis (optional, for research only)
 ├── data/
 │   ├── train.csv         # Kaggle annotations (ImageId, ClassId, EncodedPixels)
 │   └── train_images/     # 12,568 steel surface images (.jpg)
 ├── models/
-│   └── best_model.pth    # Saved after training
-├── results/              # Runtime outputs — plots saved during training
+│   └── best_model.pth    # Saved after training (git-ignored)
+├── results/              # Runtime outputs — plots and reports (git-ignored)
+├── legacy/
+│   └── check_dups.py     # Perceptual hash check for train/test leakage (optional)
 └── docs/
+    ├── concepts.md            # Explanations of key concepts and code decisions
     ├── structure_diagram.py   # Generates the file dependency diagram
-    └── structure_diagram.png  # Visual map of how project files connect
+    ├── structure_diagram.png  # Visual map of how project files connect
+    ├── pipeline_diagram.py    # Generates the ML pipeline overview diagram
+    └── pipeline_diagram.png   # Step-by-step pipeline for train.py and demo.py
 ```
 
 ---
@@ -78,13 +81,19 @@ python train.py
 ```
 - Requires a CUDA-capable GPU
 - Trains for 15 epochs, saves the best checkpoint to `models/best_model.pth`
-- Saves all result plots to `results/`
+- Saves all result plots and classification report to `results/`
 
 ### 3. Run live inference
 ```bash
 python demo.py
 ```
 Picks a random image from the held-out test split and shows the model's prediction with class probabilities.
+
+### 4. Regenerate diagrams (optional)
+```bash
+python docs/structure_diagram.py
+python docs/pipeline_diagram.py
+```
 
 ---
 

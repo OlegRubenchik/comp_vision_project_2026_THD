@@ -235,8 +235,14 @@ model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=T
 
 _, test_acc, test_preds, test_labels = evaluate(model, test_loader, criterion)
 print(f"Test Accuracy: {test_acc:.4f}")
+
+report = classification_report(test_labels, test_preds, target_names=CLASS_NAMES, digits=4)
 print("\nPer-class report:")
-print(classification_report(test_labels, test_preds, target_names=CLASS_NAMES, digits=4))
+print(report)
+
+report_path = RESULTS_DIR / "classification_report.txt"
+report_path.write_text(report)
+print(f"Saved: {report_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
