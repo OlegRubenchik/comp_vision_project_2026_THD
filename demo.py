@@ -1,104 +1,77 @@
 """
-Steel Defect Detection — Live Demo (with ground truth)
-Uses the held-out test split from train_images — model never saw these.
-Run multiple times to get different random images.
+Steel Defect Detection — Live Demo
+Loads the trained model and predicts on a random image from the test split.
+
+Run multiple times to see different images.
+The test split is never shown to the model during training, so these are
+genuine unseen predictions.
 """
 
-import os, random
+import os
 import torch
 import torch.nn as nn
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-from PIL import Image
-from torchvision import transforms, models
+from torchvision import models
 from torchvision.models import EfficientNet_B0_Weights
-from sklearn.model_selection import train_test_split
 
-# ── CONFIG ──
-from paths import TRAIN_CSV, TRAIN_IMAGES, MODEL_PATH
+from paths import TRAIN_CSV, TRAIN_IMAGES, MODEL_PATH, CLASS_NAMES, NUM_CLASSES
+from dataset import build_label_dataframe, make_splits, val_transform
 
-IMG_SIZE     = 256
-SEED         = 42
-DEVICE       = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SEED   = 42
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ── REBUILD TEST SPLIT (same as main.py) ──
-df = pd.read_csv(TRAIN_CSV)
-all_images = [f for f in os.listdir(TRAIN_IMAGES) if f.endswith(".jpg")]
-defective_ids = set(df["ImageId"].unique())
+# ── Rebuild the same test split as train.py ───────────────────────────────────
+label_df = build_label_dataframe(TRAIN_CSV, TRAIN_IMAGES)
+_, _, test_df = make_splits(label_df, SEED)
+print(f"Test split: {len(test_df)} images")
 
-label_df = pd.DataFrame({
-    "image_id": all_images,
-    "label": [1 if img in defective_ids else 0 for img in all_images]
-})
-
-_, temp_df = train_test_split(label_df, test_size=0.30, random_state=SEED,
-                               stratify=label_df["label"])
-_, test_df = train_test_split(temp_df, test_size=0.50, random_state=SEED,
-                               stratify=temp_df["label"])
-
-print(f"Test split size: {len(test_df)} images")
-
-# ── LOAD MODEL ──
+# ── Load model ────────────────────────────────────────────────────────────────
 model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
-model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
-model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
+model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True))
 model = model.to(DEVICE)
 model.eval()
 
-transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
-
-# ── PREDICT ──
+# ── Predict ───────────────────────────────────────────────────────────────────
 def predict(image_path):
-    img = Image.open(image_path).convert("RGB")
-    tensor = transform(img).unsqueeze(0).to(DEVICE)
+    """Return predicted class index, all class probabilities, and the PIL image."""
+    from PIL import Image
+    img    = Image.open(image_path).convert("RGB")
+    tensor = val_transform(img).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
-        output = model(tensor)
-        probs = torch.softmax(output, dim=1)[0]
-        p_no_defect = probs[0].item()
-        p_defect    = probs[1].item()
-    pred = "DEFECT" if p_defect > 0.5 else "NO DEFECT"
-    return pred, p_defect, p_no_defect, img
+        probs = torch.softmax(model(tensor), dim=1)[0].cpu().numpy()
+    return int(probs.argmax()), probs, img
 
-# ── PICK RANDOM IMAGE FROM TEST SPLIT ──
-row = test_df.sample(1).iloc[0]
+
+# ── Pick a random test image ──────────────────────────────────────────────────
+row        = test_df.sample(1).iloc[0]
 image_path = os.path.join(TRAIN_IMAGES, row["image_id"])
-true_label = "DEFECT" if row["label"] == 1 else "NO DEFECT"
+true_class = int(row["label"])
 
-pred, p_defect, p_no_defect, img = predict(image_path)
-correct = pred == true_label
+pred_class, probs, img = predict(image_path)
+correct = pred_class == true_class
 
-# ── PLOT ──
-fig, axes = plt.subplots(1, 2, figsize=(12, 4),
-                          gridspec_kw={"width_ratios": [3, 1]})
-
-pred_color = "#2ecc71" if pred == "NO DEFECT" else "#e74c3c"
-result_str = "✓ CORRECT" if correct else "✗ WRONG"
+# ── Plot ──────────────────────────────────────────────────────────────────────
+bar_colors   = ["#95a5a6", "#e74c3c", "#e67e22", "#3498db", "#2ecc71"]
 result_color = "#2ecc71" if correct else "#e74c3c"
+result_str   = "CORRECT" if correct else "WRONG"
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4),
+                          gridspec_kw={"width_ratios": [3, 2]})
 
 axes[0].imshow(img, cmap="gray", aspect="auto")
-axes[0].set_title(
-    f"True label: {true_label}     {result_str}",
-    fontsize=12, fontweight="bold", color=result_color
-)
+axes[0].set_title(f"True: {CLASS_NAMES[true_class]}     [{result_str}]",
+                   fontsize=12, fontweight="bold", color=result_color)
 axes[0].axis("off")
 
-bars = axes[1].barh(["No Defect", "Defect"],
-                    [p_no_defect, p_defect],
-                    color=["#2ecc71", "#e74c3c"],
-                    edgecolor="black")
-axes[1].set_xlim(0, 1)
-axes[1].set_title(f"Predicted: {pred}", fontsize=13,
-                   fontweight="bold", color=pred_color)
-axes[1].set_xlabel("Probability")
-for bar, val in zip(bars, [p_no_defect, p_defect]):
-    axes[1].text(val + 0.01, bar.get_y() + bar.get_height()/2,
-                 f"{val:.3f}", va="center", fontweight="bold")
+bars = axes[1].barh(CLASS_NAMES, probs, color=bar_colors, edgecolor="black")
+axes[1].set_xlim(0, 1.15)
+axes[1].set_title(f"Predicted: {CLASS_NAMES[pred_class]}",
+                   fontsize=12, fontweight="bold", color=bar_colors[pred_class])
+axes[1].set_xlabel("Probability (softmax)")
+for bar, val in zip(bars, probs):
+    axes[1].text(val + 0.02, bar.get_y() + bar.get_height() / 2,
+                 f"{val:.3f}", va="center", fontweight="bold", fontsize=9)
 
 plt.suptitle(f"Image: {row['image_id']}", fontsize=9, color="gray")
 plt.tight_layout()

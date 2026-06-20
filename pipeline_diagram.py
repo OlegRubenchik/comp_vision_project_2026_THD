@@ -27,18 +27,18 @@ COLORS = {
 # Each step: (label, color_key, optional_sub_label)
 TRAIN_STEPS = [
     ("paths.py",                      "io",      "DATA_DIR · TRAIN_CSV · MODEL_PATH · RESULTS_DIR"),
-    ("eda.py  →  run_eda()",          "process", "class balance · sample images"),
-    ("Dataset Preparation",           "process", "label_df  |  70 / 15 / 15 split"),
+    ("eda.py  →  run_eda()",          "process", "5-class distribution · sample images per class"),
+    ("Label Assignment",              "process", "dominant defect by pixel count → class 0-4"),
+    ("Dataset Preparation",           "process", "label_df  |  70 / 15 / 15 stratified split"),
     ("Augmentation & Transforms",     "process", "train: flip, jitter  |  val/test: resize+norm"),
     ("SteelDataset + DataLoader",     "process", "batch=32, pin_memory"),
-    ("EfficientNet-B0\n(ImageNet pretrained)", "model", "replace classifier head → 2 classes"),
+    ("EfficientNet-B0\n(ImageNet pretrained)", "model", "replace classifier head → 5 classes"),
     ("Class-Weighted Loss + Adam\n+ CosineAnnealingLR", "model", "lr=1e-4 · epochs=15"),
     ("Training Loop",                 "model",   "save best val-acc → models/best_model.pth"),
     ("Training Curves",               "output",  "results/training_curves.png"),
-    ("Test Set Evaluation",           "model",   "accuracy · AUC · classification report"),
-    ("Confusion Matrix / ROC / PR",   "output",  "results/evaluation_metrics.png"),
-    ("Failure Case Analysis",         "output",  "results/false_positives/negatives.png"),
-    ("Inference Demo",                "output",  "results/demo_inference.png"),
+    ("Test Set Evaluation",           "model",   "accuracy · per-class report · confusion matrix"),
+    ("Confusion Matrix\n+ Per-Class Accuracy", "output", "results/confusion_matrix.png"),
+    ("Failure Case Analysis",         "output",  "results/failure_cases.png"),
 ]
 
 DEMO_STEPS = [
