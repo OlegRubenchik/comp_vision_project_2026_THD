@@ -1,5 +1,5 @@
 # Presentation Script — Steel Defect Detection
-15 minutes total. Demo on slide 9.
+11 slides, 15 minutes total. Demo on slide 9.
 
 ---
 
@@ -113,7 +113,21 @@ The bar chart shows the model's confidence. On clear cases you'll see one bar cl
 
 ---
 
-## Slide 10 — Conclusion & Limitations
+## Slide 10 — Lessons Learned
+
+**Noisy labels** — some images visually show surface damage but are labeled No Defect. This isn't a mistake in our code — Severstal intentionally didn't label defects below their QC threshold. The model learns industrial standards, not visual intuition. We only discovered this by actually looking at failure cases.
+
+**Aspect ratio distortion** — the original images are 256×1600 pixels — very wide strips. We resize to 256×256, which squashes the image. A better approach would be to crop random 256×256 patches, but resizing still worked well enough at 92% accuracy.
+
+**Windows multiprocessing** — PyTorch DataLoader supports parallel data loading with `num_workers > 0`, which speeds up training significantly. On Windows this causes a crash due to how Python spawns processes. We set `num_workers=0` which means the main process loads all data — slower, but stable.
+
+**Mild overfitting** — train accuracy reached ~95% while validation plateaued at ~92%. The gap is small and didn't get worse over epochs, so it wasn't a problem in practice. Dropout in EfficientNet and data augmentation kept it in check.
+
+**Best epoch wasn't the last** — the model peaked at epoch 8. Without checkpoint saving we would have taken a slightly worse final model without knowing it.
+
+---
+
+## Slide 11 — Conclusion & Limitations
 
 We built a 5-class steel defect classifier reaching 92% test accuracy using transfer learning on EfficientNet-B0.
 
