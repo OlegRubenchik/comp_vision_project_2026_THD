@@ -1,16 +1,17 @@
 """
 Steel Defect Detection — Live Demo
-Loads the trained model and predicts on a random image from the test split.
 
-Run multiple times to see different images.
-The test split is never shown to the model during training, so these are
-genuine unseen predictions.
+1. Shows 3 random images from the test set
+2. You pick one by typing 1, 2, or 3
+3. Model predicts that image and shows result with probabilities
 """
 
 import os
 import torch
 import torch.nn as nn
+import pandas as pd
 import matplotlib.pyplot as plt
+from PIL import Image
 from torchvision import models
 from torchvision.models import EfficientNet_B0_Weights
 
@@ -23,7 +24,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ── Rebuild the same test split as train.py ───────────────────────────────────
 label_df = build_label_dataframe(TRAIN_CSV, TRAIN_IMAGES)
 _, _, test_df = make_splits(label_df, SEED)
-print(f"Test split: {len(test_df)} images")
 
 # ── Load model ────────────────────────────────────────────────────────────────
 model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
@@ -32,10 +32,9 @@ model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=T
 model = model.to(DEVICE)
 model.eval()
 
-# ── Predict ───────────────────────────────────────────────────────────────────
+
 def predict(image_path):
     """Return predicted class index, all class probabilities, and the PIL image."""
-    from PIL import Image
     img    = Image.open(image_path).convert("RGB")
     tensor = val_transform(img).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
@@ -43,16 +42,50 @@ def predict(image_path):
     return int(probs.argmax()), probs, img
 
 
-# ── Pick a random test image ──────────────────────────────────────────────────
-row        = test_df.sample(1).iloc[0]
-image_path = os.path.join(TRAIN_IMAGES, row["image_id"])
-true_class = int(row["label"])
+# ── Step 1: Show 3 random test images to pick from ───────────────────────────
+# Sample one image per class until we have 3 images all from different classes
+sampled_classes = []
+sampled_rows    = []
+for _, row in test_df.sample(frac=1).iterrows():
+    if int(row["label"]) not in sampled_classes:
+        sampled_classes.append(int(row["label"]))
+        sampled_rows.append(row)
+    if len(sampled_rows) == 3:
+        break
 
+candidates = pd.DataFrame(sampled_rows).reset_index(drop=True)
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+fig.suptitle("Pick an image to predict — type 1, 2, or 3 in the terminal",
+             fontsize=13, fontweight="bold")
+
+bar_colors = ["#95a5a6", "#e74c3c", "#e67e22", "#3498db", "#2ecc71"]
+
+for i, (_, row) in enumerate(candidates.iterrows()):
+    img = Image.open(os.path.join(TRAIN_IMAGES, row["image_id"])).convert("RGB")
+    axes[i].imshow(img, cmap="gray", aspect="auto")
+    axes[i].set_title(f"[{i + 1}]  True: {CLASS_NAMES[int(row['label'])]}",
+                      fontsize=11, fontweight="bold",
+                      color=bar_colors[int(row["label"])])
+    axes[i].axis("off")
+
+plt.tight_layout()
+plt.show()
+
+# ── Step 2: Ask user to pick ──────────────────────────────────────────────────
+while True:
+    choice = input("\nEnter image number (1, 2, or 3): ").strip()
+    if choice in ("1", "2", "3"):
+        break
+    print("Please enter 1, 2, or 3.")
+
+selected = candidates.iloc[int(choice) - 1]
+image_path = os.path.join(TRAIN_IMAGES, selected["image_id"])
+true_class = int(selected["label"])
+
+# ── Step 3: Predict and show result ──────────────────────────────────────────
 pred_class, probs, img = predict(image_path)
-correct = pred_class == true_class
-
-# ── Plot ──────────────────────────────────────────────────────────────────────
-bar_colors   = ["#95a5a6", "#e74c3c", "#e67e22", "#3498db", "#2ecc71"]
+correct      = pred_class == true_class
 result_color = "#2ecc71" if correct else "#e74c3c"
 result_str   = "CORRECT" if correct else "WRONG"
 
@@ -73,6 +106,6 @@ for bar, val in zip(bars, probs):
     axes[1].text(val + 0.02, bar.get_y() + bar.get_height() / 2,
                  f"{val:.3f}", va="center", fontweight="bold", fontsize=9)
 
-plt.suptitle(f"Image: {row['image_id']}", fontsize=9, color="gray")
+plt.suptitle(f"Image: {selected['image_id']}", fontsize=9, color="gray")
 plt.tight_layout()
 plt.show()
